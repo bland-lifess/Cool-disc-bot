@@ -10,7 +10,8 @@ const EMOTES = {
     LEMON: '<:lemonslot:1467753414648795320>',
     MONEY: '<:moneyslot:1467753282041811025>',
     DIAMOND: '<:diamondslot:1467753600745734466>',
-    CROWN: '<:crownslot:1467753347728674909>'
+    CROWN: '<:crownslot:1467753347728674909>',
+    HANDLE: '<:slothandle:1468039275575775364>'
 };
 
 // ─────────────────────────────────────────────
@@ -185,12 +186,9 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
 
     // ── send spinning animation ───────────────
     const spinningFrame =
-        '╔══════════════════╗\n' +
-        '║  🎰 spinning...  ║\n' +
-        '║                  ║\n' +
-        `║  ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}  ║\n` +
-        '║                  ║\n' +
-        '╚══════════════════╝';
+        `_**[SLOTS]**_\n` +
+        `${EMOTES.HANDLE} ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}    bet 💰 ${amount}\n` +
+        `|                        |`;
 
     let spinMsg;
     try {
@@ -221,35 +219,26 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
 
     // ── reveal after animation ────────────────
     setTimeout(async () => {
-        const reelLine = reels.map(r => EMOTES[r.key]).join(' ');
-        const isTriple = reels[0].key === reels[1].key && reels[1].key === reels[2].key;
+        const reelLine  = reels.map(r => EMOTES[r.key]).join(' ');
+        const isTriple  = reels[0].key === reels[1].key && reels[1].key === reels[2].key;
         const isJackpot = isTriple && reels[0].key === 'CROWN';
 
-        let titleLine, resultLine;
-
+        let outcomeText;
         if (isJackpot) {
-            titleLine  = '🎉 JACKPOT 🎉';
-            resultLine = `💎 **+${payout} coins**`;
+            outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}🎉`;
         } else if (isTriple) {
-            titleLine  = '✨ big win ✨';
-            resultLine = `💰 **+${payout} coins**`;
+            outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}✨`;
         } else if (isWin) {
-            titleLine  = '👍 small win';
-            resultLine = `💰 **+${payout} coins**`;
+            outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}`;
         } else {
-            titleLine  = '💔 no match';
-            resultLine = `lost **${amount} coins**`;
+            outcomeText = `and lost 💰 ${amount} ${EMOTES.HANDLE}`;
         }
 
         const resultFrame =
-            '╔══════════════════╗\n' +
-            `║  ${titleLine}\n` +
-            '║                  ║\n' +
-            `║  ${reelLine}  ║\n` +
-            '║                  ║\n' +
-            `║  ${resultLine}\n` +
-            `║  balance: **${newBalance}**\n` +
-            '╚══════════════════╝';
+            `_**[SLOTS]**_\n` +
+            `${EMOTES.HANDLE} ${reelLine}    bet 💰 ${amount}\n` +
+            `|                        |    ${outcomeText}\n` +
+            `|                        |    balance: 💰 ${newBalance}`;
 
         try {
             await spinMsg.edit(resultFrame);
@@ -373,12 +362,9 @@ client.on('interactionCreate', async (interaction) => {
 
         // ── send the spin animation as the initial reply ──
         const spinningFrame =
-            '╔══════════════════╗\n' +
-            '║  🎰 spinning...  ║\n' +
-            '║                  ║\n' +
-            `║  ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}  ║\n` +
-            '║                  ║\n' +
-            '╚══════════════════╝';
+            `_**[SLOTS]**_\n` +
+            `${EMOTES.HANDLE} ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}    bet 💰 ${amount}\n` +
+            `|                        |`;
 
         await interaction.reply(spinningFrame).catch(() => {});
 
@@ -412,31 +398,22 @@ client.on('interactionCreate', async (interaction) => {
             const isTriple  = reels[0].key === reels[1].key && reels[1].key === reels[2].key;
             const isJackpot = isTriple && reels[0].key === 'CROWN';
 
-            let titleLine, resultLine;
-
+            let outcomeText;
             if (isJackpot) {
-                titleLine  = '🎉 JACKPOT 🎉';
-                resultLine = `💎 **+${payout} coins**`;
+                outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}🎉`;
             } else if (isTriple) {
-                titleLine  = '✨ big win ✨';
-                resultLine = `💰 **+${payout} coins**`;
+                outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}✨`;
             } else if (isWin) {
-                titleLine  = '👍 small win';
-                resultLine = `💰 **+${payout} coins**`;
+                outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}`;
             } else {
-                titleLine  = '💔 no match';
-                resultLine = `lost **${amount} coins**`;
+                outcomeText = `and lost 💰 ${amount} ${EMOTES.HANDLE}`;
             }
 
             const resultFrame =
-                '╔══════════════════╗\n' +
-                `║  ${titleLine}\n` +
-                '║                  ║\n' +
-                `║  ${reelLine}  ║\n` +
-                '║                  ║\n' +
-                `║  ${resultLine}\n` +
-                `║  balance: **${newBalance}**\n` +
-                '╚══════════════════╝';
+                `_**[SLOTS]**_\n` +
+                `${EMOTES.HANDLE} ${reelLine}    bet 💰 ${amount}\n` +
+                `|                        |    ${outcomeText}\n` +
+                `|                        |    balance: 💰 ${newBalance}`;
 
             await spinMsg.edit(resultFrame).catch(() => {});
         }, SPIN_DELAY_MS);
