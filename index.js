@@ -170,13 +170,13 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
     const balance = getBalance(userId);
 
     if (amount > balance) {
-        return replyFn(`not enough coins. your balance: **${balance}**`);
+        return replyFn(`⚠️ not enough coins\n💰 balance: **${balance}**`);
     }
 
     const cooldownLeft = getCooldownLeft(userId);
     if (cooldownLeft > 0) {
         const secs = (cooldownLeft / 1000).toFixed(1);
-        return replyFn(`on cooldown. try again in **${secs}s**`);
+        return replyFn(`⏳ on cooldown — try again in **${secs}s**`);
     }
 
     // ── lock bet & cooldown ───────────────────
@@ -184,9 +184,17 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
     cooldowns.set(userId, Date.now());
 
     // ── send spinning animation ───────────────
+    const spinningFrame =
+        '╔══════════════════╗\n' +
+        '║  🎰 spinning...  ║\n' +
+        '║                  ║\n' +
+        `║  ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}  ║\n` +
+        '║                  ║\n' +
+        '╚══════════════════╝';
+
     let spinMsg;
     try {
-        spinMsg = await sendFn(`${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}`);
+        spinMsg = await sendFn(spinningFrame);
     } catch (err) {
         console.error('[slots] failed to send spin message:', err);
         balances.set(userId, balance); // refund
@@ -214,16 +222,40 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
     // ── reveal after animation ────────────────
     setTimeout(async () => {
         const reelLine = reels.map(r => EMOTES[r.key]).join(' ');
+        const isTriple = reels[0].key === reels[1].key && reels[1].key === reels[2].key;
+        const isJackpot = isTriple && reels[0].key === 'CROWN';
 
-        const resultText = isWin
-            ? `${reelLine}\n\n✨ **won ${payout} coins**  ·  balance: ${newBalance}`
-            : `${reelLine}\n\n💔 **lost ${amount} coins**  ·  balance: ${newBalance}`;
+        let titleLine, resultLine;
+
+        if (isJackpot) {
+            titleLine  = '🎉 JACKPOT 🎉';
+            resultLine = `💎 **+${payout} coins**`;
+        } else if (isTriple) {
+            titleLine  = '✨ big win ✨';
+            resultLine = `💰 **+${payout} coins**`;
+        } else if (isWin) {
+            titleLine  = '👍 small win';
+            resultLine = `💰 **+${payout} coins**`;
+        } else {
+            titleLine  = '💔 no match';
+            resultLine = `lost **${amount} coins**`;
+        }
+
+        const resultFrame =
+            '╔══════════════════╗\n' +
+            `║  ${titleLine}\n` +
+            '║                  ║\n' +
+            `║  ${reelLine}  ║\n` +
+            '║                  ║\n' +
+            `║  ${resultLine}\n` +
+            `║  balance: **${newBalance}**\n` +
+            '╚══════════════════╝';
 
         try {
-            await spinMsg.edit(resultText);
+            await spinMsg.edit(resultFrame);
         } catch (err) {
             console.error('[slots] failed to edit spin message:', err);
-            replyFn(resultText).catch(() => {});
+            replyFn(resultFrame).catch(() => {});
         }
     }, SPIN_DELAY_MS);
 }
@@ -244,13 +276,13 @@ function handleDaily(userId) {
         const hh = String(Math.floor(msLeft / 3600000)).padStart(2, '0');
         const mm = String(Math.floor((msLeft % 3600000) / 60000)).padStart(2, '0');
         const ss = String(Math.floor((msLeft % 60000) / 1000)).padStart(2, '0');
-        return `already claimed today. resets in **${hh}:${mm}:${ss}**`;
+        return `⏳ already claimed today\nresets in **${hh}:${mm}:${ss}**`;
     }
 
     dailyClaims.set(userId, today);
     const bal = getBalance(userId) + DAILY_AMOUNT;
     balances.set(userId, bal);
-    return `🎁 **+${DAILY_AMOUNT} coins** claimed  ·  balance: ${bal}`;
+    return `🎁 **+${DAILY_AMOUNT} coins** claimed\n💰 balance: **${bal}**`;
 }
 
 /**
@@ -259,11 +291,11 @@ function handleDaily(userId) {
  */
 function handleAddCoins(invokerId, targetId, amount) {
     if (invokerId !== ADMIN_ID) {
-        return '🚫 you don\'t have permission to use this command';
+        return '🚫 **permission denied**';
     }
     const bal = getBalance(targetId) + amount;
     balances.set(targetId, bal);
-    return `✅ **+${amount} coins** added to <@${targetId}>  ·  their balance: ${bal}`;
+    return `✅ **+${amount} coins** → <@${targetId}>\n💰 their balance: **${bal}**`;
 }
 
 // ─────────────────────────────────────────────
@@ -279,11 +311,11 @@ client.on('messageCreate', async (message) => {
     if (cmd === '.slots') {
         const raw = parts[1];
         if (!raw) {
-            return message.reply('please provide a bet amount: `.slots <amount>`').catch(() => {});
+            return message.reply('🎰 usage: `.slots <amount>`').catch(() => {});
         }
         const amount = Number(raw);
         if (!Number.isInteger(amount) || amount <= 0) {
-            return message.reply('bet must be a positive whole number').catch(() => {});
+            return message.reply('⚠️ bet must be a positive whole number').catch(() => {});
         }
 
         return handleSlots(
@@ -305,7 +337,7 @@ client.on('messageCreate', async (message) => {
         const amount = Number(parts[2]);
 
         if (!target || !Number.isInteger(amount) || amount <= 0) {
-            return message.reply('usage: `.addcoins @user <amount>`').catch(() => {});
+            return message.reply('⚠️ usage: `.addcoins @user <amount>`').catch(() => {});
         }
 
         return message.reply(handleAddCoins(message.author.id, target.id, amount)).catch(() => {});
@@ -326,13 +358,13 @@ client.on('interactionCreate', async (interaction) => {
         // ── validate before replying (avoids a flash of the spin animation on error) ──
         const balance = getBalance(userId);
         if (amount > balance) {
-            return interaction.reply(`not enough coins. your balance: **${balance}**`).catch(() => {});
+            return interaction.reply(`⚠️ not enough coins\n💰 balance: **${balance}**`).catch(() => {});
         }
 
         const cooldownLeft = getCooldownLeft(userId);
         if (cooldownLeft > 0) {
             const secs = (cooldownLeft / 1000).toFixed(1);
-            return interaction.reply(`on cooldown. try again in **${secs}s**`).catch(() => {});
+            return interaction.reply(`⏳ on cooldown — try again in **${secs}s**`).catch(() => {});
         }
 
         // ── lock bet & cooldown ───────────────────
@@ -340,7 +372,15 @@ client.on('interactionCreate', async (interaction) => {
         cooldowns.set(userId, Date.now());
 
         // ── send the spin animation as the initial reply ──
-        await interaction.reply(`${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}`).catch(() => {});
+        const spinningFrame =
+            '╔══════════════════╗\n' +
+            '║  🎰 spinning...  ║\n' +
+            '║                  ║\n' +
+            `║  ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}  ║\n` +
+            '║                  ║\n' +
+            '╚══════════════════╝';
+
+        await interaction.reply(spinningFrame).catch(() => {});
 
         const spinMsg = await interaction.fetchReply().catch(() => null);
         if (!spinMsg) {
@@ -368,12 +408,37 @@ client.on('interactionCreate', async (interaction) => {
 
         // ── reveal after animation ────────────────
         setTimeout(async () => {
-            const reelLine   = reels.map(r => EMOTES[r.key]).join(' ');
-            const resultText = isWin
-                ? `${reelLine}\n\n✨ **won ${payout} coins**  ·  balance: ${newBalance}`
-                : `${reelLine}\n\n💔 **lost ${amount} coins**  ·  balance: ${newBalance}`;
+            const reelLine  = reels.map(r => EMOTES[r.key]).join(' ');
+            const isTriple  = reels[0].key === reels[1].key && reels[1].key === reels[2].key;
+            const isJackpot = isTriple && reels[0].key === 'CROWN';
 
-            await spinMsg.edit(resultText).catch(() => {});
+            let titleLine, resultLine;
+
+            if (isJackpot) {
+                titleLine  = '🎉 JACKPOT 🎉';
+                resultLine = `💎 **+${payout} coins**`;
+            } else if (isTriple) {
+                titleLine  = '✨ big win ✨';
+                resultLine = `💰 **+${payout} coins**`;
+            } else if (isWin) {
+                titleLine  = '👍 small win';
+                resultLine = `💰 **+${payout} coins**`;
+            } else {
+                titleLine  = '💔 no match';
+                resultLine = `lost **${amount} coins**`;
+            }
+
+            const resultFrame =
+                '╔══════════════════╗\n' +
+                `║  ${titleLine}\n` +
+                '║                  ║\n' +
+                `║  ${reelLine}  ║\n` +
+                '║                  ║\n' +
+                `║  ${resultLine}\n` +
+                `║  balance: **${newBalance}**\n` +
+                '╚══════════════════╝';
+
+            await spinMsg.edit(resultFrame).catch(() => {});
         }, SPIN_DELAY_MS);
 
         return;
