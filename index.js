@@ -1,5 +1,9 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder } = require('discord.js');
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+
+const DATA_FILE = path.join(__dirname, 'bot-data.json');
 
 // ─────────────────────────────────────────────
 // CUSTOM EMOTES — do not modify
@@ -10,8 +14,7 @@ const EMOTES = {
     LEMON: '<:lemonslot:1467753414648795320>',
     MONEY: '<:moneyslot:1467753282041811025>',
     DIAMOND: '<:diamondslot:1467753600745734466>',
-    CROWN: '<:crownslot:1467753347728674909>',
-    HANDLE: '<:slothandle:1468039275575775364>'
+    CROWN: '<:crownslot:1467753347728674909>'
 };
 
 // ─────────────────────────────────────────────
@@ -52,12 +55,61 @@ const SPIN_DELAY_MS    = 3000;          // 3 seconds (matches your animation)
 const DAILY_AMOUNT     = 50;
 
 // ─────────────────────────────────────────────
+// PERSISTENCE HELPERS
+// ─────────────────────────────────────────────
+
+/** Load saved data from disk */
+function loadData() {
+    try {
+        if (fs.existsSync(DATA_FILE)) {
+            const raw = fs.readFileSync(DATA_FILE, 'utf8');
+            const data = JSON.parse(raw);
+            
+            // Load balances
+            if (data.balances) {
+                for (const [userId, balance] of Object.entries(data.balances)) {
+                    balances.set(userId, balance);
+                }
+            }
+            
+            // Load daily claims
+            if (data.dailyClaims) {
+                for (const [userId, date] of Object.entries(data.dailyClaims)) {
+                    dailyClaims.set(userId, date);
+                }
+            }
+            
+            console.log('[persistence] data loaded successfully');
+        }
+    } catch (err) {
+        console.error('[persistence] failed to load data:', err);
+    }
+}
+
+/** Save current data to disk */
+function saveData() {
+    try {
+        const data = {
+            balances: Object.fromEntries(balances),
+            dailyClaims: Object.fromEntries(dailyClaims)
+        };
+        
+        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (err) {
+        console.error('[persistence] failed to save data:', err);
+    }
+}
+
+// Auto-save every 5 minutes
+setInterval(saveData, 5 * 60 * 1000);
+
+// ─────────────────────────────────────────────
 // EXPRESS KEEP-ALIVE SERVER
 // ─────────────────────────────────────────────
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/', (_req, res) => res.send('slot bot is alive'));
+app.all('/', (_req, res) => res.send('OK'));
 
 app.listen(PORT, () => console.log(`[keep-alive] listening on port ${PORT}`));
 
@@ -107,7 +159,10 @@ function spinOnce() {
 
 /** Return the current balance, seeding the Map if this is a first-time user. */
 function getBalance(userId) {
-    if (!balances.has(userId)) balances.set(userId, STARTING_BALANCE);
+    if (!balances.has(userId)) {
+        balances.set(userId, STARTING_BALANCE);
+        saveData();
+    }
     return balances.get(userId);
 }
 
@@ -140,6 +195,12 @@ const commands = [
     new SlashCommandBuilder()
         .setName('daily')
         .setDescription('claim your daily coins'),
+    new SlashCommandBuilder()
+        .setName('balance')
+        .setDescription('check your coin balance'),
+    new SlashCommandBuilder()
+        .setName('leaderboard')
+        .setDescription('view the top 10 richest players'),
     new SlashCommandBuilder()
         .setName('addcoins')
         .setDescription('(admin) add coins to a user')
@@ -187,7 +248,7 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
     // ── send spinning animation ───────────────
     const spinningFrame =
         `_**[SLOTS]**_\n` +
-        `${EMOTES.HANDLE} ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}    bet 💰 ${amount}\n` +
+        `  ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}\n` +
         `|                        |`;
 
     let spinMsg;
@@ -216,6 +277,7 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
     const isWin      = payout > 0;
     const newBalance = getBalance(userId) + payout;
     balances.set(userId, newBalance);
+    saveData(); // Save after updating balance
 
     // ── reveal after animation ────────────────
     setTimeout(async () => {
@@ -223,28 +285,28 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
         const isTriple  = reels[0].key === reels[1].key && reels[1].key === reels[2].key;
         const isJackpot = isTriple && reels[0].key === 'CROWN';
 
-        let outcomeText;
-        if (isJackpot) {
-            outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}🎉`;
-        } else if (isTriple) {
-            outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}✨`;
-        } else if (isWin) {
-            outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}`;
+        let description;
+        if (isWin) {
+            description = `**You won: ${payout}**\nBalance: ${newBalance}`;
         } else {
-            outcomeText = `and lost 💰 ${amount} ${EMOTES.HANDLE}`;
+            description = `**You lost: ${amount}**\nBalance: ${newBalance}`;
         }
 
-        const resultFrame =
+        const resultText =
             `_**[SLOTS]**_\n` +
-            `${EMOTES.HANDLE} ${reelLine}    bet 💰 ${amount}\n` +
-            `|                        |    ${outcomeText}\n` +
-            `|                        |    balance: 💰 ${newBalance}`;
+            `  ${reelLine}\n` +
+            `|                        |\n` +
+            `|                        |`;
+
+        const embed = new EmbedBuilder()
+            .setColor(isWin ? 0x57F287 : 0xED4337)
+            .setDescription(description);
 
         try {
-            await spinMsg.edit(resultFrame);
+            await spinMsg.edit({ content: resultText, embeds: [embed] });
         } catch (err) {
             console.error('[slots] failed to edit spin message:', err);
-            replyFn(resultFrame).catch(() => {});
+            replyFn(`${resultText}\n${description}`).catch(() => {});
         }
     }, SPIN_DELAY_MS);
 }
@@ -271,6 +333,7 @@ function handleDaily(userId) {
     dailyClaims.set(userId, today);
     const bal = getBalance(userId) + DAILY_AMOUNT;
     balances.set(userId, bal);
+    saveData(); // Save after daily claim
     return `🎁 **+${DAILY_AMOUNT} coins** claimed\n💰 balance: **${bal}**`;
 }
 
@@ -284,6 +347,7 @@ function handleAddCoins(invokerId, targetId, amount) {
     }
     const bal = getBalance(targetId) + amount;
     balances.set(targetId, bal);
+    saveData(); // Save after adding coins
     return `✅ **+${amount} coins** → <@${targetId}>\n💰 their balance: **${bal}**`;
 }
 
@@ -318,6 +382,41 @@ client.on('messageCreate', async (message) => {
     // ── .daily ──────────────────────────────────
     if (cmd === '.daily') {
         return message.reply(handleDaily(message.author.id)).catch(() => {});
+    }
+
+    // ── .balance / .bal ─────────────────────────
+    if (cmd === '.balance' || cmd === '.bal') {
+        const balance = getBalance(message.author.id);
+        return message.reply(`💰 your balance: **${balance}** coins`).catch(() => {});
+    }
+
+    // ── .leaderboard / .lb ──────────────────────
+    if (cmd === '.leaderboard' || cmd === '.lb') {
+        const sorted = Array.from(balances.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+        if (sorted.length === 0) {
+            return message.reply('📊 no one has played yet!').catch(() => {});
+        }
+
+        const leaderboardText = sorted
+            .map((entry, index) => {
+                const userId = entry[0];
+                const balance = entry[1];
+                const user = client.users.cache.get(userId);
+                const username = user ? user.username : 'unknown user';
+                return `${index + 1}. **${username}** — 💰 ${balance}`;
+            })
+            .join('\n');
+
+        const embed = new EmbedBuilder()
+            .setColor(0xFFD700)
+            .setTitle('🏆 leaderboard')
+            .setDescription(leaderboardText)
+            .setTimestamp();
+
+        return message.reply({ embeds: [embed] }).catch(() => {});
     }
 
     // ── .addcoins @user <amount> ────────────────
@@ -363,7 +462,7 @@ client.on('interactionCreate', async (interaction) => {
         // ── send the spin animation as the initial reply ──
         const spinningFrame =
             `_**[SLOTS]**_\n` +
-            `${EMOTES.HANDLE} ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}    bet 💰 ${amount}\n` +
+            `  ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}\n` +
             `|                        |`;
 
         await interaction.reply(spinningFrame).catch(() => {});
@@ -391,6 +490,7 @@ client.on('interactionCreate', async (interaction) => {
         const isWin      = payout > 0;
         const newBalance = getBalance(userId) + payout;
         balances.set(userId, newBalance);
+        saveData(); // Save after updating balance
 
         // ── reveal after animation ────────────────
         setTimeout(async () => {
@@ -398,24 +498,24 @@ client.on('interactionCreate', async (interaction) => {
             const isTriple  = reels[0].key === reels[1].key && reels[1].key === reels[2].key;
             const isJackpot = isTriple && reels[0].key === 'CROWN';
 
-            let outcomeText;
-            if (isJackpot) {
-                outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}🎉`;
-            } else if (isTriple) {
-                outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}✨`;
-            } else if (isWin) {
-                outcomeText = `and won 💰 ${payout} ${EMOTES.HANDLE}`;
+            let description;
+            if (isWin) {
+                description = `**You won: ${payout}**\nBalance: ${newBalance}`;
             } else {
-                outcomeText = `and lost 💰 ${amount} ${EMOTES.HANDLE}`;
+                description = `**You lost: ${amount}**\nBalance: ${newBalance}`;
             }
 
-            const resultFrame =
+            const resultText =
                 `_**[SLOTS]**_\n` +
-                `${EMOTES.HANDLE} ${reelLine}    bet 💰 ${amount}\n` +
-                `|                        |    ${outcomeText}\n` +
-                `|                        |    balance: 💰 ${newBalance}`;
+                `  ${reelLine}\n` +
+                `|                        |\n` +
+                `|                        |`;
 
-            await spinMsg.edit(resultFrame).catch(() => {});
+            const embed = new EmbedBuilder()
+                .setColor(isWin ? 0x57F287 : 0xED4337)
+                .setDescription(description);
+
+            await spinMsg.edit({ content: resultText, embeds: [embed] }).catch(() => {});
         }, SPIN_DELAY_MS);
 
         return;
@@ -424,6 +524,41 @@ client.on('interactionCreate', async (interaction) => {
     // ── /daily ──────────────────────────────────
     if (interaction.commandName === 'daily') {
         return interaction.reply(handleDaily(interaction.user.id)).catch(() => {});
+    }
+
+    // ── /balance ────────────────────────────────
+    if (interaction.commandName === 'balance') {
+        const balance = getBalance(interaction.user.id);
+        return interaction.reply(`💰 your balance: **${balance}** coins`).catch(() => {});
+    }
+
+    // ── /leaderboard ────────────────────────────
+    if (interaction.commandName === 'leaderboard') {
+        const sorted = Array.from(balances.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+        if (sorted.length === 0) {
+            return interaction.reply('📊 no one has played yet!').catch(() => {});
+        }
+
+        const leaderboardText = sorted
+            .map((entry, index) => {
+                const userId = entry[0];
+                const balance = entry[1];
+                const user = client.users.cache.get(userId);
+                const username = user ? user.username : 'unknown user';
+                return `${index + 1}. **${username}** — 💰 ${balance}`;
+            })
+            .join('\n');
+
+        const embed = new EmbedBuilder()
+            .setColor(0xFFD700)
+            .setTitle('🏆 leaderboard')
+            .setDescription(leaderboardText)
+            .setTimestamp();
+
+        return interaction.reply({ embeds: [embed] }).catch(() => {});
     }
 
     // ── /addcoins ───────────────────────────────
@@ -440,6 +575,28 @@ client.on('interactionCreate', async (interaction) => {
 client.on('error', (err) => console.error('[discord error]', err));
 
 process.on('unhandledRejection', (err) => console.error('[unhandled rejection]', err));
+
+// ─────────────────────────────────────────────
+// PERIODIC AUTO-SAVE & GRACEFUL SHUTDOWN
+// ─────────────────────────────────────────────
+// Auto-save every 5 minutes
+setInterval(() => {
+    saveData();
+    console.log('[data] auto-saved');
+}, 5 * 60 * 1000);
+
+// Save on shutdown
+process.on('SIGINT', () => {
+    console.log('[shutdown] saving data...');
+    saveData();
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log('[shutdown] saving data...');
+    saveData();
+    process.exit(0);
+});
 
 // ─────────────────────────────────────────────
 // LOGIN
