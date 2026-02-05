@@ -25,11 +25,11 @@ const EMOTES = {
 //   multiplier2x  → payout for a pair
 // ─────────────────────────────────────────────
 const SLOTS = [
-    { key: 'CHERRY',  weight: 20, multiplier3x: 2,   multiplier2x: 0.4 },  // common   (40% shared)
-    { key: 'LEMON',   weight: 20, multiplier3x: 2.5, multiplier2x: 0.4 },  // common   (40% shared)
-    { key: 'MONEY',   weight: 30, multiplier3x: 4,   multiplier2x: 0.6 },  // uncommon (30%)
+    { key: 'CHERRY',  weight: 15, multiplier3x: 2,   multiplier2x: 0.4 },  // common   (40% shared)
+    { key: 'LEMON',   weight: 15, multiplier3x: 2.5, multiplier2x: 0.4 },  // common   (40% shared)
+    { key: 'MONEY',   weight: 25, multiplier3x: 4,   multiplier2x: 0.6 },  // uncommon (30%)
     { key: 'DIAMOND', weight: 20, multiplier3x: 8,   multiplier2x: 1.0 },  // rare     (20%)
-    { key: 'CROWN',   weight: 10, multiplier3x: 20,  multiplier2x: 1.5 }   // jackpot  (10%)
+    { key: 'CROWN',   weight: 15, multiplier3x: 20,  multiplier2x: 1.5 }   // jackpot  (10%)
 ];
 
 // Pre-compute the cumulative weight table once at startup for fast lookups.
