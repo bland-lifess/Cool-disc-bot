@@ -100,16 +100,13 @@ function saveData() {
     }
 }
 
-// Auto-save every 5 minutes
-setInterval(saveData, 5 * 60 * 1000);
-
 // ─────────────────────────────────────────────
 // EXPRESS KEEP-ALIVE SERVER
 // ─────────────────────────────────────────────
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-app.all('/', (_req, res) => res.send('OK'));
+app.all('/', (_req, res) => res.sendStatus(200));
 
 app.listen(PORT, () => console.log(`[keep-alive] listening on port ${PORT}`));
 
