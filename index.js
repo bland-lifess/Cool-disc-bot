@@ -246,7 +246,7 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
     const spinningFrame =
         `_**[SLOTS]**_\n` +
         `  ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}\n` +
-        `|                        |`;
+        `|                    |`;
 
     let spinMsg;
     try {
@@ -292,8 +292,8 @@ async function handleSlots(userId, amount, sendFn, replyFn) {
         const resultText =
             `_**[SLOTS]**_\n` +
             `  ${reelLine}\n` +
-            `|                        |\n` +
-            `|                        |`;
+            `|                    |\n` +
+            `|                    |`;
 
         const embed = new EmbedBuilder()
             .setColor(isWin ? 0x57F287 : 0xED4337)
@@ -384,7 +384,11 @@ client.on('messageCreate', async (message) => {
     // ── .balance / .bal ─────────────────────────
     if (cmd === '.balance' || cmd === '.bal') {
         const balance = getBalance(message.author.id);
-        return message.reply(`💰 your balance: **${balance}** coins`).catch(() => {});
+        const embed = new EmbedBuilder()
+            .setColor(0x57F287)
+            .setDescription(`💰 **Balance: ${balance}** coins`)
+            .setTimestamp();
+        return message.reply({ embeds: [embed] }).catch(() => {});
     }
 
     // ── .leaderboard / .lb ──────────────────────
@@ -460,7 +464,7 @@ client.on('interactionCreate', async (interaction) => {
         const spinningFrame =
             `_**[SLOTS]**_\n` +
             `  ${EMOTES.ROLLING} ${EMOTES.ROLLING} ${EMOTES.ROLLING}\n` +
-            `|                        |`;
+            `|                    |`;
 
         await interaction.reply(spinningFrame).catch(() => {});
 
@@ -505,8 +509,8 @@ client.on('interactionCreate', async (interaction) => {
             const resultText =
                 `_**[SLOTS]**_\n` +
                 `  ${reelLine}\n` +
-                `|                        |\n` +
-                `|                        |`;
+                `|                    |\n` +
+                `|                    |`;
 
             const embed = new EmbedBuilder()
                 .setColor(isWin ? 0x57F287 : 0xED4337)
@@ -526,7 +530,11 @@ client.on('interactionCreate', async (interaction) => {
     // ── /balance ────────────────────────────────
     if (interaction.commandName === 'balance') {
         const balance = getBalance(interaction.user.id);
-        return interaction.reply(`💰 your balance: **${balance}** coins`).catch(() => {});
+        const embed = new EmbedBuilder()
+            .setColor(0x57F287)
+            .setDescription(`💰 **Balance: ${balance}** coins`)
+            .setTimestamp();
+        return interaction.reply({ embeds: [embed] }).catch(() => {});
     }
 
     // ── /leaderboard ────────────────────────────
@@ -562,7 +570,10 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.commandName === 'addcoins') {
         const target = interaction.options.getUser('user');
         const amount = interaction.options.getInteger('amount');
-        return interaction.reply(handleAddCoins(interaction.user.id, target.id, amount)).catch(() => {});
+        return interaction.reply({ 
+            content: handleAddCoins(interaction.user.id, target.id, amount),
+            ephemeral: true 
+        }).catch(() => {});
     }
 });
 
